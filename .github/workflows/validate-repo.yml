@@ -1,0 +1,27 @@
+name: ZEUS - Validação estrutural
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar arquivos essenciais e configuração de publicação
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s README.md
+          test -s docs/GOOGLE_PLAY_OIDC.md
+          test -s .github/workflows/play-internal.yml
+          grep -q 'track: internal' .github/workflows/play-internal.yml
+          ! grep -q 'track: production' .github/workflows/play-internal.yml
+          echo "Validação estrutural aprovada."
