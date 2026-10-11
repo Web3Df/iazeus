@@ -1,0 +1,74 @@
+name: ZEUS - Publicação Play Store (teste interno)
+
+on:
+  workflow_dispatch:
+    inputs:
+      aab_artifact_name:
+        description: "Nome do artefato AAB já compilado e disponível neste workflow"
+        required: true
+        default: "zeus-aab"
+      release_status:
+        description: "Estado da versão no teste interno"
+        required: true
+        type: choice
+        options:
+          - draft
+          - completed
+        default: draft
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+concurrency:
+  group: zeus-play-internal
+  cancel-in-progress: false
+
+jobs:
+  publish-internal:
+    name: Publicar somente em teste interno
+    runs-on: ubuntu-latest
+    environment: play-internal
+    steps:
+      - name: Baixar artefato AAB desta execução
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.aab_artifact_name }}
+          path: dist
+
+      - name: Verificar presença de exatamente um AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find dist -maxdepth 2 -type f -name '*.aab')
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Esperado exatamente um arquivo .aab; encontrados: ${#files[@]}" >&2
+            exit 1
+          fi
+          echo "AAB_PATH=${files[0]}" >> "$GITHUB_ENV"
+          sha256sum "${files[0]}" | tee dist/aab-sha256.txt
+
+      - id: auth
+        name: Obter credencial temporária Google via OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Publicar no canal de teste interno
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+          packageName: ${{ vars.PLAY_PACKAGE_NAME }}
+          releaseFiles: ${{ env.AAB_PATH }}
+          track: internal
+          status: ${{ inputs.release_status }}
+          changesNotSentForReview: true
+
+      - name: Guardar comprovativo de hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: zeus-play-internal-audit
+          path: dist/aab-sha256.txt
+          retention-days: 3
