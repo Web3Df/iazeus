@@ -3,8 +3,12 @@ name: ZEUS - Publicação Play Store (teste interno)
 on:
   workflow_dispatch:
     inputs:
+      build_run_id:
+        description: "ID da execução de build que publicou o artefato AAB"
+        required: true
+        type: string
       aab_artifact_name:
-        description: "Nome do artefato AAB já compilado e disponível neste workflow"
+        description: "Nome do artefato AAB nessa execução"
         required: true
         default: "zeus-aab"
       release_status:
@@ -31,11 +35,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: play-internal
     steps:
-      - name: Baixar artefato AAB desta execução
+      - name: Baixar artefato AAB da execução de build informada
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.aab_artifact_name }}
           path: dist
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
 
       - name: Verificar presença de exatamente um AAB
         shell: bash
